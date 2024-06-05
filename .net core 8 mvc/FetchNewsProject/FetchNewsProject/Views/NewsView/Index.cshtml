@@ -1,0 +1,127 @@
+﻿@model IEnumerable<FetchNewsProject.Models.NewsItem>
+
+@{
+    ViewData["Title"] = "Index";
+    var sources = ViewBag.Sources as List<string>;
+    var currentSource = ViewBag.CurrentSource as string;
+    var currentSearchWord = ViewBag.SearchWord as string;
+    var searchQuery = ViewBag.SearchQuery as List<string>;
+}
+
+<link rel="stylesheet" href="~/css/site.css">
+@* <script src="~/lib/jquery/dist/jquery.js"/></script> *@
+
+<h1>Welcome</h1>
+<h2>Topic: @(searchQuery != null ? string.Join(", ", searchQuery).ToLower() : "")</h2>
+<form method="get" action="@Url.Action("Index", "NewsView")" class="form-inline">
+    <div class="container">
+        <div class="row">
+            <div class="form-group col">
+                <label for="sourceSelect" class="mr-1">Source:</label>
+                <select class="form-control" id="sourceSelect" name="source">
+                    <option value="">All Sources</option>
+                    @if (sources != null)
+                    {
+                        @foreach (var source in sources)
+                        {
+                            <option value="@source">@source</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="form-group col">
+                <label for="fromDate" class="mr-1">From:</label>
+                @* <input type="text" class="form-control datepicker" id="fromDate" name="fromDate"> *@
+                <input type="date" id="fromDate" name="fromDate" class="form-control datepicker" />
+            </div>
+            <div class="form-group col">
+                <label for="toDate" class="mr-1">To:</label>
+                @* <input type="text" class="form-control datepicker" id="toDate" name="toDate"> *@
+                <input type="date" id="toDate" name="toDate" class="form-control datepicker" />
+            </div>
+        </div>
+        <div class="row">
+            <div class="form-group mr-2">
+                <label for="searchQuery" class="mr-1">Search:</label>
+                <input type="text" class="form-control" id="searchQueryInput" name="searchQueryInput" value="@currentSearchWord" />
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success mr-1">Filter</button>
+        <button type="button" class="btn btn-danger" onclick="clearFilters()">Clear</button>
+    </div>   
+ 
+</form>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Source)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Date)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.ImageData)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Title)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Summary)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @if(Model != null){
+            @foreach (var item in Model)
+            {
+                <tr>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.Source)
+                    </td>
+                    <td class="nowrap">
+                        @Html.DisplayFor(modelItem => item.FormattedDate)
+                    </td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(item.ImageData))
+                        {
+                            <img src="data:image/jpeg;base64,@item.ImageData" alt="News Image" style="width:100px;">
+                        }
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.Title)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(modelItem => item.Summary)
+                    </td>
+                    <td>
+                        <a href="@item.Link" target="_blank" class="btn btn-primary">More</a>
+                    </td>
+                </tr>
+             }
+        }
+    </tbody>
+</table>
+
+@section Scripts {
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script>
+        // $(function () {
+        //     $(".datepicker").datepicker({
+        //         dateFormat: 'yy-mm-dd'
+        //     });
+        // });
+
+        function clearFilters() {
+            $('#sourceSelect').val('');
+            $('#searchQueryInput').val('');
+            $('#fromDate').val('');
+            $('#toDate').val('');            
+            $('form').submit(); // 重新提交表单
+            console.log("clearFilter!!");
+        }
+    </script>
+}

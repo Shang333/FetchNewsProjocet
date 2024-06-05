@@ -1,0 +1,52 @@
+import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
+import time
+
+def fetch_all_pages_and_send(search_query, max_pages=2, api_url='http://localhost:7288/api/news'):
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service)
+    url = f"https://www.bbc.com/search?q={search_query}&filter=news"
+    driver.get(url)
+
+    time.sleep(5)  # 等待頁面加載
+
+    page_count = 1  # 初始化頁面計數器
+    all_data = []  # 用於收集所有新聞數據
+
+    while page_count <= max_pages:
+        articles = driver.find_elements(By.CSS_SELECTOR, "div[data-testid='liverpool-card']")
+        for article in articles:
+            data = {
+                'date': article.find_element(By.CSS_SELECTOR, "span[data-testid='card-metadata-lastupdated']").text if article.find_elements(By.CSS_SELECTOR, "span[data-testid='card-metadata-lastupdated']") else 'No date found',
+                'title': article.find_element(By.CSS_SELECTOR, 'h2').text if article.find_elements(By.CSS_SELECTOR, 'h2') else 'No title found',
+                'summary': article.find_element(By.CSS_SELECTOR, 'p').text if article.find_elements(By.CSS_SELECTOR, 'p') else 'No summary found',
+                'link': 'https://www.bbc.com' + article.find_element(By.CSS_SELECTOR, 'a').get_attribute('href') if article.find_elements(By.CSS_SELECTOR, 'a') else 'No link found'
+            }
+            all_data.append(data)
+
+        if page_count < max_pages:
+            try:
+                next_page = driver.find_element(By.CSS_SELECTOR, "button[data-testid='pagination-next-button']")
+                next_page.click()
+                time.sleep(10)
+                page_count += 1
+            except Exception as e:
+                print("Error navigating pages:", str(e))
+                break
+        else:
+            print("Reached page limit of", max_pages)
+            break
+
+    driver.quit()
+    
+    # 發送所有收集到的數據
+    try:
+        response = requests.post(api_url, json=all_data, verify=False)  # 禁用SSL驗證
+        print(f"Data sent with response: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print("Failed to send data:", e)
+
+fetch_all_pages_and_send('Carbon credit', max_pages=2, api_url='http://localhost:7288/api/news')

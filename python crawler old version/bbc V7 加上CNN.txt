@@ -1,0 +1,125 @@
+import requests
+import base64
+import json
+from abc import ABC, abstractmethod
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
+import time
+
+class NewsScraper(ABC):
+    def __init__(self, search_query, max_pages=2, api_url='http://localhost:5043/api/news'):
+        self.search_query = search_query
+        self.max_pages = max_pages
+        self.api_url = api_url
+        self.all_data = []
+        service = Service(ChromeDriverManager().install())
+        self.driver = webdriver.Chrome(service=service)
+
+    @abstractmethod
+    def scrape(self):
+        pass
+
+    def download_image_as_base64(self, url):
+        try:
+            response = requests.get(url)
+            return base64.b64encode(response.content).decode('utf-8')
+        except Exception as e:
+            print(f"Failed to download or encode image: {e}")
+            return None
+
+    def send_data(self):
+        headers = {'Content-Type': 'application/json'}
+        try:
+            json_data = json.dumps(self.all_data)
+            print("Data to be sent:", json_data)  # 打印数据以检查
+            response = requests.post(self.api_url, data=json_data, headers=headers, verify=False)  # 禁用SSL验证
+            print(f"Data sent with response: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print("Failed to send data:", e)
+
+    def close(self):
+        self.driver.quit()
+
+class BBCScraper(NewsScraper):
+    def scrape(self):
+        url = f"https://www.bbc.com/search?q={self.search_query}&filter=news"
+        self.driver.get(url)
+        time.sleep(5)  # 等待页面加载
+
+        page_count = 1
+        while page_count <= self.max_pages:
+            articles = self.driver.find_elements(By.CSS_SELECTOR, "div[data-testid='liverpool-card']")
+            for article in articles:
+                images = article.find_elements(By.CSS_SELECTOR, "img")
+                image_data = self.download_image_as_base64(images[0].get_attribute('src')) if images else 'No images found'
+                
+                data = {
+                    'date': article.find_element(By.CSS_SELECTOR, "span[data-testid='card-metadata-lastupdated']").text if article.find_elements(By.CSS_SELECTOR, "span[data-testid='card-metadata-lastupdated']") else 'No date found',
+                    'title': article.find_element(By.CSS_SELECTOR, 'h2').text if article.find_elements(By.CSS_SELECTOR, 'h2') else 'No title found',
+                    'summary': article.find_element(By.CSS_SELECTOR, 'p').text if article.find_elements(By.CSS_SELECTOR, 'p') else 'No summary found',
+                    'link': 'https://www.bbc.com' + article.find_element(By.CSS_SELECTOR, 'a').get_attribute('href') if article.find_elements(By.CSS_SELECTOR, 'a') else 'No link found',
+                    'imageData': image_data
+                }
+                self.all_data.append(data)
+
+            if page_count < self.max_pages:
+                try:
+                    next_page = self.driver.find_element(By.CSS_SELECTOR, "button[data-testid='pagination-next-button']")
+                    next_page.click()
+                    time.sleep(10)
+                    page_count += 1
+                except Exception as e:
+                    print("Error navigating pages:", str(e))
+                    break
+            else:
+                print("Reached page limit of", self.max_pages)
+                break
+
+class CNNScraper(NewsScraper):
+    def scrape(self):
+        url = f"https://edition.cnn.com/search?q={self.search_query}&from=0&size=10&page=1&sort=newest&types=all&section="
+        self.driver.get(url)
+        time.sleep(5)  # 等待页面加载
+
+        page_count = 1
+        while page_count <= self.max_pages:
+            articles = self.driver.find_elements(By.CSS_SELECTOR, "div[data-component-name='card']")
+            for article in articles:
+                image_element = article.find_element(By.CSS_SELECTOR, "img") if article.find_elements(By.CSS_SELECTOR, "img") else None
+                image_data = self.download_image_as_base64(image_element.get_attribute('src')) if image_element else 'No images found'
+                
+                data = {
+                    'date': article.find_element(By.CSS_SELECTOR, ".container__date.container_list-images-with-description__date").text if article.find_elements(By.CSS_SELECTOR, ".container__date.container_list-images-with-description__date") else 'No date found',
+                    'title': article.find_element(By.CSS_SELECTOR, "span[data-editable='headline']").text if article.find_elements(By.CSS_SELECTOR, "span[data-editable='headline']") else 'No title found',
+                    'summary': article.find_element(By.CSS_SELECTOR, 'p').text if article.find_elements(By.CSS_SELECTOR, 'p') else 'No summary found',
+                    'link': article.find_element(By.CSS_SELECTOR, 'a').get_attribute('href') if article.find_elements(By.CSS_SELECTOR, 'a') else 'No link found',
+                    'imageData': image_data
+                }
+                self.all_data.append(data)
+
+            if page_count < self.max_pages:
+                try:
+                    next_page = self.driver.find_element(By.CSS_SELECTOR, ".pagination-arrow.pagination-arrow-right.search__pagination-link.text-active")
+                    next_page.click()
+                    next_page.click()
+                    time.sleep(10)
+                    page_count += 1
+                except Exception as e:
+                    print("CNN Error navigating pages:", str(e))
+                    break
+            else:
+                print("CNN Reached page limit of", self.max_pages)
+                break
+
+# 示例使用
+# bbc_scraper = BBCScraper('Carbon credit')
+# bbc_scraper.scrape()
+# bbc_scraper.send_data()
+# bbc_scraper.close()
+
+cnn_scraper = CNNScraper('Carbon credit')
+cnn_scraper.scrape()
+cnn_scraper.send_data()
+cnn_scraper.close()

@@ -1,0 +1,72 @@
+import requests
+import base64
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
+import time
+import json
+
+def download_image_as_base64(url):
+    try:
+        response = requests.get(url)
+        return base64.b64encode(response.content).decode('utf-8')
+    except Exception as e:
+        print(f"Failed to download or encode image: {e}")
+        return None
+
+def fetch_all_pages_and_send(search_query, max_pages=2, api_url='http://localhost:5043/api/news'):
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service)
+    url = f"https://www.bbc.com/search?q={search_query}&filter=news"
+    driver.get(url)
+
+    time.sleep(5)  # 等待页面加载
+
+    page_count = 1  # 初始化页面计数器
+    all_data = []  # 用于收集所有新闻数据
+
+    while page_count <= max_pages:
+        articles = driver.find_elements(By.CSS_SELECTOR, "div[data-testid='liverpool-card']")
+        for article in articles:
+            images = article.find_elements(By.CSS_SELECTOR, "img")
+            # 选择第一张图片，如果存在的话，下载并编码为Base64
+            imageData = download_image_as_base64(images[0].get_attribute('src')) if images else 'No images found'
+            
+            data = {
+                'date': article.find_element(By.CSS_SELECTOR, "span[data-testid='card-metadata-lastupdated']").text if article.find_elements(By.CSS_SELECTOR, "span[data-testid='card-metadata-lastupdated']") else 'No date found',
+                'title': article.find_element(By.CSS_SELECTOR, 'h2').text if article.find_elements(By.CSS_SELECTOR, 'h2') else 'No title found',
+                'summary': article.find_element(By.CSS_SELECTOR, 'p').text if article.find_elements(By.CSS_SELECTOR, 'p') else 'No summary found',
+                'link': 'https://www.bbc.com' + article.find_element(By.CSS_SELECTOR, 'a').get_attribute('href') if article.find_elements(By.CSS_SELECTOR, 'a') else 'No link found',
+                'imageData': imageData  # 现在是单个字符串
+            }
+            all_data.append(data)
+
+        if page_count < max_pages:
+            try:
+                next_page = driver.find_element(By.CSS_SELECTOR, "button[data-testid='pagination-next-button']")
+                next_page.click()
+                time.sleep(10)
+                page_count += 1
+            except Exception as e:
+                print("Error navigating pages:", str(e))
+                break
+        else:
+            print("Reached page limit of", max_pages)
+            break
+
+    driver.quit()
+    
+    # 发送所有收集到的数据
+    headers = {'Content-Type': 'application/json'}
+    try:
+        json_data = json.dumps(all_data)
+        print("Data to be sent:", json_data)  # 打印数据以检查
+
+        response = requests.post(api_url, data=json_data, headers=headers, verify=False)  # 禁用SSL验证
+        print(f"Data sent with response: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print("Failed to send data:", e)
+
+# 示例使用
+fetch_all_pages_and_send('Carbon credit', max_pages=2, api_url='http://localhost:5043/api/news')

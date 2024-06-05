@@ -1,0 +1,50 @@
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+
+def fetch_news(search_query):
+    # BBC搜索頁面的URL
+    url = "https://www.bbc.com/search?q=Carbon%20credit&edgeauth=eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJrZXkiOiAiZmFzdGx5LXVyaS10b2tlbi0xIiwiZXhwIjogMTcxNTY2MDQxOCwibmJmIjogMTcxNTY2MDA1OCwicmVxdWVzdHVyaSI6ICIlMkZzZWFyY2glM0ZxJTNEQ2FyYm9uJTI1MjBjcmVkaXQifQ.zP8vBiqzAaPh5xP90IMbXfRREGBrcywaYenxCJKg6Ms"
+    params = {
+        'q': search_query,
+        'filter': 'news'
+    }
+    
+    # 發送GET請求
+    response = requests.get(url, params=params)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # 找到所有具有指定 data-testid 屬性的新聞項目
+    articles = soup.find_all('div', attrs={'data-testid': 'liverpool-card'})
+
+    print("找到的新聞項目數量：", len(articles))  # 打印找到的文章數量
+
+    # 列表來存儲所有新聞數據
+    news_list = []
+    
+    for article in articles:
+        # print(f'-----article: {article}')
+        title = article.find('h2').text.strip() if article.find('h2') else 'No title found'
+        link = 'https://www.bbc.com' + article.find('a').get('href') if article.find('a') else 'No link found'
+        summary = article.find('p').text.strip() if article.find('p') else 'No summary found'
+        date_element = article.find('span', attrs={'data-testid': 'card-metadata-lastupdated'})
+        # print(f'-----date_element: {date_element}') 
+        date = date_element.text.strip() if date_element else 'No date found'
+        
+        news_list.append({
+            'date': date,
+            'title': title,
+            'link': link,
+            'summary': summary
+        })
+    
+    return news_list
+
+def save_to_csv(news_data, filename='news.csv'):
+    df = pd.DataFrame(news_data)
+    df.to_csv(filename, index=False)
+    print(f'Data saved to {filename}')
+
+# 使用示例
+news_data = fetch_news('Carbon credit')
+save_to_csv(news_data)
